@@ -2,6 +2,10 @@ import express from 'express';
 import "dotenv/config";
 import { connectDB } from './config/db.js';
 import { authRouter } from './routes/authRoutes.js';
+import { configurePassport } from './config/passport.js';
+import cookieParser from 'cookie-parser';
+import { userProfileRouter } from './routes/userProfileRoutes.js'; // Import the new router
+import passport from 'passport';
 
 
 
@@ -12,9 +16,16 @@ const app = express();
 
 // Middleware
 app.use(express.json()); // Parse JSON bodies
+app.use(cookieParser()); // Add cookie parser middleware
+
+// Passport configuration
+configurePassport();
+app.use(passport.initialize());
+
 
 //Initialize Routes
 
+app.use('/api/userprofiles', userProfileRouter); // Mount the user profile router
 app.use(authRouter);
 
 
@@ -32,5 +43,3 @@ connectDB()
         console.log(err);
         process.exit(1); // Exit process with failure
     });
-
-

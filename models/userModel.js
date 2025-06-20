@@ -24,27 +24,63 @@ const userSchema = new mongoose.Schema({
     },
     phone: {
         type: String,
-        required: [true, 'Phone number is required'],
+        required: function() {
+            return !this.googleId;
+        },
         match: [/^(\+233|233|0)(20|23|24|26|27|28|50|54|55|56|57|59)\d{7}$/, 'Please enter a valid Ghana phone number']
     },
-    password: {
+    profilePicture: {   
         type: String,
-        required: [true, 'Password is required'],
+        default: 'https://res.cloudinary.com/dz4qj1x8h/image/upload/v1709300000/default-profile-picture.png'
+    },
+    password: {
+        type: String,  
+        required: function() {      
+            return !this.googleId; 
+        },
         minlength: [8, 'Password must be at least 8 characters'],
+    },
+
+age: {
+        type: Number,
+        min: [12, 'You must be at least 12 years old'],
+        max: [120, 'Age cannot exceed 120 years']
+    },
+      interests: {
+        type: [String],
+        default: []
+    },
+
+ language: {
+        type: String,
+        enum: ['English', 'Twi', 'Ewe', 'Hausa', 'Other'],
+        default: 'English'
+    },
+referralCode: {
+        type: String,
+        unique: true,
+        sparse: true // Add this to allow multiple nulls but enforce uniqueness for actual values
+    },
+  referredBy: {
+        type: String
     },
     // User Role
     role: {
         type: String,
-        enum: ['jobseeker', 'employer', 'admin'],
-        default: 'jobseeker'
+        enum: ['user', 'jobseeker', 'employer', 'admin'],
+        default: 'user'
     },
-
+profile: {
+      type: mongoose.Schema.Types.ObjectId,
+              ref: 'UserProfile',
+        default: null
+    },
     // Account Status
     isActive: {
         type: Boolean,
         default: false
     },
-    lastlogin: {
+    lastLogin: {
         type: Date,
         default: Date.now()
     },
@@ -80,6 +116,12 @@ const userSchema = new mongoose.Schema({
         type: Date,
         default: null
     },
+    googleId: { 
+        type: String,
+        unique: true,
+        sparse: true 
+    }
+
 
 }, {
     timestamps: true
