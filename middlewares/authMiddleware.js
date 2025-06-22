@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { User } from '../models/userModel.js'; // Import your User model
+import passport from 'passport';
 
 const Token_expiration = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 export const generateAuthToken = (res, user) => {
@@ -40,4 +41,17 @@ export const authenticateUser = async (req, res, next) => {
         console.error('Token verification failed:', error);
         return res.status(401).json({ message: 'Unauthorized access: Invalid or expired token' });
     }
+};
+
+
+
+// Middleware to protect routes using the JWT strategy
+export const protect = passport.authenticate('jwt', { session: false });
+
+// Middleware for admin-only authorization
+export const admin = (req, res, next) => {
+    if (req.user && req.user.role === 'admin') {
+        return next();
+    }
+    return res.status(403).json({ message: 'Not authorized as an admin' });
 };

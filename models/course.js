@@ -1,11 +1,5 @@
 import mongoose from "mongoose";
 
-
-
-
-
-
-
 // Course Model
 const moduleSchema = new mongoose.Schema({
     title: {
@@ -63,7 +57,7 @@ const courseSchema = new mongoose.Schema({
     thumbnail: {
         type: String,
         required: [true, 'Course thumbnail is required'],
-        match: [/^https?:\/\/.+\.(jpg|jpeg|png|gif)$/, 'Thumbnail must be a valid image URL']
+        match: [/^https?:\/\/.+/, 'Thumbnail must be a valid URL']
     },
     duration: {
         type: String,

@@ -10,12 +10,12 @@ const referralSchema = new mongoose.Schema({
     referredUser: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
+        required: true,
+        unique: true
     },
     referralCode: {
         type: String,
-        required: true,
-        unique: true
+        required: true
     },
     status: {
         type: String,

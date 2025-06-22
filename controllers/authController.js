@@ -6,6 +6,22 @@ import userValidationSchema from "../validation_schema/userValidation.js";
 import { generateAuthToken } from "../middlewares/authMiddleware.js";
 import { createUserProfile } from "./userProfileController.js";
 import passport from "passport";
+import crypto from  "crypto";
+
+// Helper function to generate a unique referral code
+const generateReferralCode = async() => {
+    let code;
+let isUnique = false;
+while (!isUnique) {
+    code = crypto.randomBytes(4).toString('hex').toUpperCase();
+    // Check if the code already exists in the database
+    const existingUser = await User.findOne({ referralCode: code });
+    if (!existingUser) {
+        isUnique = true;
+    }
+}
+return code;
+}
 
 // Register a new user
 export const registerUser = async (req, res) => {
@@ -24,36 +40,53 @@ export const registerUser = async (req, res) => {
             return res.status(400).json({ success: false, message: "User with this email already exists." });
         }
 
-        let referralCode = null;
-        if(value.referredBy){
-            const referredByUser = await User.findOne({ referralCode: value.referredBy });
-            if(!referredByUser){
-              return res.status(400).json({ success: false, message: "Invalid referral code." });
+        // Validate referral code BEFORE creating the user
+        if (value.referredBy) {
+            const referrer = await User.findOne({ referralCode: value.referredBy });
+            if (!referrer) {
+                return res.status(400).json({ success: false, message: "Invalid referral code provided." });
             }
-                // Create a new Referral record
-        const newReferral = await Referral.create({
-            referrer: referredByUser._id, // Assuming `_id` is the user ID field
-            referredUser: newUser._id,
-            referralCode
-        });
-    
-        // Add the generated referral code to the new user
-        referralCode = newReferral.referralCode;
-    }
+        }
 
         // Hash the password
         value.password = await bcrypt.hash(value.password, 10);
+
+        // Generate a unique referral code
+        const referralCode = await generateReferralCode();
+
         //generate a verification token
-        const verificationToken = Math.floor(100000 + Math.random() * 900000).toString();
+         const verificationToken = crypto.randomBytes(16).toString('hex');
+
         // Create a new user
         try {
             const newUser = await User.create({
                 ...value,
-                referralCode,
+                referralCode: referralCode, // Use the generated referral code
                 email: email, // Ensure the lowercased email from the check is used for creation
                 verificationToken,
                 verificationTokenExpiry: Date.now() + 3600000 // 1 hour
             });
+
+            // If the user was referred by someone, create a Referral record
+            if (value.referredBy) {
+                const referrer = await User.findOne({ referralCode: value.referredBy });
+                if (referrer) {
+                    // Check if the referred user already exists in the Referral collection
+                    const existingReferral = await Referral.findOne({ referredUser: newUser._id });
+                    if (!existingReferral) {
+                        // Create a new Referral record
+                        await Referral.create({
+                            referrer: referrer._id,
+                            referredUser: newUser._id,
+                            referralCode: value.referredBy // Record the code that was used
+                        });
+                    } else {
+                        console.log(`Referral already exists for user ${newUser._id} with referrer ${referrer._id}`);
+                    }
+                } else {
+                    console.warn(`No referrer found with referral code ${value.referredBy}`);
+                }
+            }
 
             // Create a user profile
             if (newUser) {
@@ -245,15 +278,31 @@ export const logoutUser = async (req, res) => {
 };
 
 export const googleAuth = (req, res, next) => {
-    passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
+    const { referredBy } = req.query; // Capture referral code from query param
+
+    // Encode the referral code into a base64 string to pass in the state
+    const state = referredBy ? Buffer.from(JSON.stringify({ referredBy })).toString('base64') : undefined;
+
+    const authenticator = passport.authenticate('google', {
+        scope: ['profile', 'email'],
+        state: state // Pass the encoded state to Google
+    });
+
+    authenticator(req, res, next);
 };
 
 export const googleAuthCallback = (req, res, next) => {
     passport.authenticate('google', { session: false, failureRedirect: `${process.env.CLIENT_URL || 'http://localhost:3000'}/login?error=google_auth_failed` }, (err, user, info) => {
         if (err || !user) {
             // Log the error or info for debugging
-            console.error("Google authentication error:", err, info);
-            return res.redirect(`${process.env.FAILED_URL || 'http://localhost:3000'}?error=google_auth_failed`);
+            console.error("Google authentication error:", err || (info ? info.message : 'No user returned'));
+
+            // Check for our specific referral error message from Passport
+            if (info && info.message === 'Invalid referral code.') {
+                // Redirect with a specific error query parameter for the frontend to handle
+                return res.redirect(`${process.env.CLIENT_URL || 'http://localhost:3000/login'}?error=invalid_referral_code`);
+            }
+            return res.redirect(`${process.env.FAILED_URL || 'http://localhost:3000/login'}?error=google_auth_failed`);
         }
         // Now, generate your JWT and set it as a cookie.
         generateAuthToken(res, user);

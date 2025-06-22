@@ -7,7 +7,8 @@ const userValidationSchema = Joi.object({
     email: Joi.string().email().required(),
     phone: Joi.string().length(10).required(),
     password: Joi.string().min(8).max(30).required(),
-    confirmPassword: Joi.string().valid(Joi.ref('password')).required()
+    confirmPassword: Joi.string().valid(Joi.ref('password')).required(),
+    referredBy: Joi.string().trim().optional().allow('') // Add this line
 })
 
 export default userValidationSchema;
